@@ -35,13 +35,12 @@ class C1581_CmdChannel
 {
 	uint8_t databuffer[256];
 	uint8_t databufferidx = 0;
-	uint8_t *localbuffer = 0;
+	uint8_t *localbuffer;
 	int localbufferidx = 0;
 	int localblocknum = 0;
 	int blockidx = 0;
-	C1581 *c1581;
-	static bool firstcall;
-	static int dirctr;
+	static C1581 *c1581;
+	
 	
 public:
 	C1581_CmdChannel();
@@ -67,8 +66,8 @@ public:
 	uint8_t validate(void);
 	
 	int get_directory(uint8_t *localbuffer);
-	int getFirstDirectoryEntry(DirectoryEntry *direntry);
-	int getNextDirectoryEntry(DirectoryEntry *direntry);
+
+	int getNextDirectoryEntry(DirectoryEntry **direntry);
 	
 };
 

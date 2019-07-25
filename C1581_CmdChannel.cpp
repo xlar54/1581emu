@@ -4,11 +4,12 @@
 #include <stdio.h>
 #include <ctype.h>
 
+#include "C1581.h"
 #include "C1581_CmdChannel.h"
 #include "iec_errors.h"
 
-bool C1581_CmdChannel::firstcall;
-int C1581_CmdChannel::dirctr;
+C1581* C1581_CmdChannel::c1581;
+//uint8_t *C1581_CmdChannel::localbuffer;
 
 C1581_CmdChannel::C1581_CmdChannel()
 {
@@ -21,6 +22,7 @@ void C1581_CmdChannel::init(C1581 *parent)
 }
 C1581_CmdChannel::~C1581_CmdChannel()
 {
+	c1581 = NULL;
 }
 
 uint8_t C1581_CmdChannel::open(uint8_t *command, uint8_t secondary)
@@ -55,6 +57,7 @@ uint8_t C1581_CmdChannel::open(uint8_t *command, uint8_t secondary)
 		localbufferidx = initialize();
 	}
 
+	
 	return ERR_OK;
 }
 
@@ -230,7 +233,7 @@ uint8_t C1581_CmdChannel::validate(void)
 
 int C1581_CmdChannel::get_directory(uint8_t *buffer)
 {
-	DirectoryEntry dirEntry;
+	DirectoryEntry *dirEntry = new DirectoryEntry;
 	int ptr = 0;
 	uint16_t blocksfree = 3160;
 	uint16_t nextLinePtr = 0;
@@ -275,8 +278,6 @@ int C1581_CmdChannel::get_directory(uint8_t *buffer)
 	buffer[nextLinePtr] = 0x0101 & 0xff;
 	buffer[nextLinePtr + 1] = (0x0101 >> 8) & 0xff;
 
-	firstcall = true;
-	dirctr = 0;
 	int x = getNextDirectoryEntry(&dirEntry);
 	char line[29];
 	int linePtr = 0;
@@ -288,10 +289,10 @@ int C1581_CmdChannel::get_directory(uint8_t *buffer)
 		nextLinePtr = ptr;
 		ptr += 2;
 
-		line[linePtr++] = dirEntry.size_lo;
-		line[linePtr++] = dirEntry.size_hi;
+		line[linePtr++] = dirEntry->size_lo;
+		line[linePtr++] = dirEntry->size_hi;
 
-		int blocks = dirEntry.size_hi * 256 + dirEntry.size_lo;
+		int blocks = dirEntry->size_hi * 256 + dirEntry->size_lo;
 		blocksfree -= blocks;
 		int digits = 0;
 		while (blocks != 0)
@@ -308,10 +309,10 @@ int C1581_CmdChannel::get_directory(uint8_t *buffer)
 		int filenamlen = 0;
 		for (; filenamlen < 16; filenamlen++)
 		{
-			if (dirEntry.filename[filenamlen] == 0xa0)
+			if (dirEntry->filename[filenamlen] == 0xa0)
 				break;
 
-			line[linePtr++] = dirEntry.filename[filenamlen];
+			line[linePtr++] = dirEntry->filename[filenamlen];
 		}
 
 		line[linePtr++] = 0x22;
@@ -319,13 +320,13 @@ int C1581_CmdChannel::get_directory(uint8_t *buffer)
 		for (; filenamlen < 16 ; filenamlen++)
 			line[linePtr++] = ' ';
 
-		uint8_t tmptype = dirEntry.file_type;
+		uint8_t tmptype = dirEntry->file_type;
 		tmptype = tmptype & ~128;
 		tmptype = tmptype & ~64;
 		tmptype = tmptype & ~32;
 		tmptype = tmptype & ~16;
 
-		if ((dirEntry.file_type & 0x80) != 0x80)
+		if ((dirEntry->file_type & 0x80) != 0x80)
 			line[linePtr++] = '*';
 		else
 			line[linePtr++] = ' ';
@@ -334,7 +335,7 @@ int C1581_CmdChannel::get_directory(uint8_t *buffer)
 		line[linePtr++] = filetypes[tmptype][1];
 		line[linePtr++] = filetypes[tmptype][2];
 
-		if ((dirEntry.file_type & 64) == 64)
+		if ((dirEntry->file_type & 64) == 64)
 			line[linePtr++] = '<';
 		else
 			line[linePtr++] = ' ';
@@ -369,57 +370,72 @@ int C1581_CmdChannel::get_directory(uint8_t *buffer)
 	buffer[ptr + 2] = 0;
 	ptr += 3;
 
+
+	//delete dirEntry;
 	return ptr;
 }
 
-int C1581_CmdChannel::getNextDirectoryEntry(DirectoryEntry *dirEntry)
+int C1581_CmdChannel::getNextDirectoryEntry(DirectoryEntry **dirEntry)
 {
-	
+	static bool firstcall = true;
+	static int dirctr = 0;
+	bool lastdirsector = false;
+	bool readnextsector = false;
 
+	int offset = 0;
+	
 	if (firstcall)
 	{
 		firstcall = false;
 		c1581->goTrackSector(40, 3);
-		c1581->readSector();
+		readnextsector = true;
 	}
 	else
 	{
-		if (dirctr % 9 == 0)
+		if (dirctr % 8 == 0)
 		{
 			c1581->goTrackSector(c1581->nxttrack, c1581->nxtsector);
-			c1581->readSector();
 			dirctr = 0;
+			readnextsector = true;
 		}
 	}
 
-	int offset = dirctr * 32;
-
-	c1581->nxttrack = c1581->sectorBuffer[0x00 + offset];
-	c1581->nxtsector = c1581->sectorBuffer[0x01 + offset];
+	offset = dirctr * 32;
 	
+	if (readnextsector)
+	{
+		readnextsector = false;
+		c1581->readSector();	
+		c1581->nxttrack = c1581->sectorBuffer[0x00 + offset];
+		c1581->nxtsector = c1581->sectorBuffer[0x01 + offset];
+	}
 
-	if (c1581->nxttrack == 0x00 && c1581->sectorBuffer[0x02 + offset] == 0)
-		return -1;
+	if (c1581->nxttrack == 0x00)
+		lastdirsector = true;
 
-	dirEntry->file_type = c1581->sectorBuffer[0x02 + offset];
-	dirEntry->first_data_track = c1581->sectorBuffer[0x03 + offset];
-	dirEntry->first_data_sector = c1581->sectorBuffer[0x04 + offset];
+	(*dirEntry)->file_type = c1581->sectorBuffer[0x02 + offset];
+	(*dirEntry)->first_data_track = c1581->sectorBuffer[0x03 + offset];
+	(*dirEntry)->first_data_sector = c1581->sectorBuffer[0x04 + offset];
 
 	for (int v = 0; v < 16; v++)
-		dirEntry->filename[v] = c1581->sectorBuffer[(5 + v) + offset];
+		(*dirEntry)->filename[v] = c1581->sectorBuffer[(5 + v) + offset];
 
-	dirEntry->first_track_ssb = c1581->sectorBuffer[0x15 + offset];
-	dirEntry->first_sector_ssb = c1581->sectorBuffer[0x16 + offset];
-	dirEntry->rel_file_length = c1581->sectorBuffer[0x17 + offset];
+	(*dirEntry)->first_track_ssb = c1581->sectorBuffer[0x15 + offset];
+	(*dirEntry)->first_sector_ssb = c1581->sectorBuffer[0x16 + offset];
+	(*dirEntry)->rel_file_length = c1581->sectorBuffer[0x17 + offset];
 
 	for (int v = 0; v < 6; v++)
-		dirEntry->unused[v * dirctr] = c1581->sectorBuffer[0x18 + v + offset];
+		(*dirEntry)->unused[v * dirctr] = c1581->sectorBuffer[0x18 + v + offset];
 
-	dirEntry->size_lo = c1581->sectorBuffer[0x1e + (dirctr * 32)];
-	dirEntry->size_hi = c1581->sectorBuffer[0x1f + (dirctr * 32)];
+	(*dirEntry)->size_lo = c1581->sectorBuffer[0x1e + (dirctr * 32)];
+	(*dirEntry)->size_hi = c1581->sectorBuffer[0x1f + (dirctr * 32)];
 
 	dirctr++;
-	return 0;
+
+	if (lastdirsector)
+		return -1;
+	else
+		return 0;
 
 }
 

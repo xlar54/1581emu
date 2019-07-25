@@ -23,7 +23,7 @@ uint32_t trackOffset[80] = {
 
 BamAllocation alloc;
 C1581_CmdChannel cmd_channel;
-C1581_Channel channels[15];
+C1581_Channel channels[14];
 
 C1581 ::C1581()
 {
@@ -31,12 +31,11 @@ C1581 ::C1581()
 }
 C1581 ::~C1581()
 {
-
 }
 
 void C1581 :: init(uint8_t deviceNumber)
 {
-	for (int x = 0; x < 15; x++)
+	for (int x = 0; x < 14; x++)
 	{
 		channels[x].init(this);
 		channels[x].number = x + 1;
@@ -210,7 +209,7 @@ uint8_t C1581::getFileTrackSector(char *filename, uint8_t *track, uint8_t *secto
 {
 	int ptr = 0;
 	uint8_t linePtr = 0;
-	DirectoryEntry dirEntry;
+	DirectoryEntry *dirEntry = new DirectoryEntry;
 	int localbufferidx = 0;
 
 	int x = 0;
@@ -223,18 +222,18 @@ uint8_t C1581::getFileTrackSector(char *filename, uint8_t *track, uint8_t *secto
 		uint8_t z = 0;
 		for(; z < 16; z++)
 		{
-			if (dirEntry.filename[z] == 0xa0)
+			if (dirEntry->filename[z] == 0xa0)
 				break;
 
-			line[z] = dirEntry.filename[z];
+			line[z] = dirEntry->filename[z];
 		}
 		
 		line[z] = 0;
 
 		if (strcmp(line, filename) == 0)
 		{
-			*track = dirEntry.first_data_track;
-			*sector = dirEntry.first_data_sector;
+			*track = dirEntry->first_data_track;
+			*sector = dirEntry->first_data_sector;
 			return ERR_OK;
 		}
 

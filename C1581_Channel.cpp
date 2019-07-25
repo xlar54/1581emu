@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include "C1581_Channel.h"
 #include "iec_errors.h"
 
@@ -9,7 +10,7 @@ C1581_Channel::C1581_Channel()
 }
 C1581_Channel::~C1581_Channel()
 {
-
+	c1581 = NULL;
 }
 
 void C1581_Channel::init(C1581 *parent)
