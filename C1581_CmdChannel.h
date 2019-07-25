@@ -40,7 +40,8 @@ class C1581_CmdChannel
 	int localblocknum = 0;
 	int blockidx = 0;
 	C1581 *c1581;
-
+	static bool firstcall;
+	static int dirctr;
 	
 public:
 	C1581_CmdChannel();
@@ -68,8 +69,7 @@ public:
 	int get_directory(uint8_t *localbuffer);
 	int getFirstDirectoryEntry(DirectoryEntry *direntry);
 	int getNextDirectoryEntry(DirectoryEntry *direntry);
-
-	friend class C1581_Head;
+	
 };
 
 #endif

@@ -215,7 +215,7 @@ uint8_t C1581::getFileTrackSector(char *filename, uint8_t *track, uint8_t *secto
 
 	int x = 0;
 
-	localbufferidx = cmd_channel.getFirstDirectoryEntry(&dirEntry);
+	localbufferidx = cmd_channel.getNextDirectoryEntry(&dirEntry);
 
 	while (localbufferidx != -1)
 	{

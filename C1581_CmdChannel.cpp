@@ -7,10 +7,12 @@
 #include "C1581_CmdChannel.h"
 #include "iec_errors.h"
 
+bool C1581_CmdChannel::firstcall;
+int C1581_CmdChannel::dirctr;
 
 C1581_CmdChannel::C1581_CmdChannel()
 {
-
+	
 }
 
 void C1581_CmdChannel::init(C1581 *parent)
@@ -273,6 +275,8 @@ int C1581_CmdChannel::get_directory(uint8_t *buffer)
 	buffer[nextLinePtr] = 0x0101 & 0xff;
 	buffer[nextLinePtr + 1] = (0x0101 >> 8) & 0xff;
 
+	firstcall = true;
+	dirctr = 0;
 	int x = getNextDirectoryEntry(&dirEntry);
 	char line[29];
 	int linePtr = 0;
@@ -368,41 +372,9 @@ int C1581_CmdChannel::get_directory(uint8_t *buffer)
 	return ptr;
 }
 
-int C1581_CmdChannel::getFirstDirectoryEntry(DirectoryEntry *dirEntry)
-{
-	c1581->goTrackSector(40, 3);
-	c1581->readSector();
-
-	c1581->nxttrack = c1581->sectorBuffer[0x00];
-	c1581->nxtsector = c1581->sectorBuffer[0x01];
-
-	if (c1581->nxttrack == 0x00 && c1581->sectorBuffer[0x02] == 0)
-		return -1;
-
-	dirEntry->file_type = c1581->sectorBuffer[0x02];
-	dirEntry->first_data_track = c1581->sectorBuffer[0x03];
-	dirEntry->first_data_sector = c1581->sectorBuffer[0x04];
-
-	for (int v = 0; v < 16; v++)
-		dirEntry->filename[v] = c1581->sectorBuffer[5 + v];
-
-	dirEntry->first_track_ssb = c1581->sectorBuffer[0x15];
-	dirEntry->first_sector_ssb = c1581->sectorBuffer[0x16];
-	dirEntry->rel_file_length = c1581->sectorBuffer[0x17];
-
-	for (int v = 0; v < 6; v++)
-		dirEntry->unused[v] = c1581->sectorBuffer[0x18 + v];
-
-	dirEntry->size_lo = c1581->sectorBuffer[0x1e];
-	dirEntry->size_hi = c1581->sectorBuffer[0x1f];
-
-	return 0;
-}
-
 int C1581_CmdChannel::getNextDirectoryEntry(DirectoryEntry *dirEntry)
 {
-	static bool firstcall = true;
-	static int dirctr = 0;
+	
 
 	if (firstcall)
 	{
