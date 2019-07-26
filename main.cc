@@ -134,10 +134,10 @@ void test_readfile(C1581 *c1581)
 	uint8_t byte;
 	int ctr = 0;
 
-	while (c1581->read(15, &byte) == ERR_OK)
+	while (c1581->read(1, &byte) == ERR_OK)
 	{
 		ctr++;
-		printf("%c", byte);
+		printf("0x%02X ", byte);
 	}
 
 	c1581->close(1);
@@ -147,7 +147,7 @@ int main( int argc, const char* argv[] )
 {
 	uint8_t image[819200];
 
-	FILE *f = fopen("GEOS64.d81", "rb");
+	FILE *f = fopen("test-full.d81", "rb");
 	fseek(f, 0, SEEK_END);
 	long fsize = ftell(f);
 	fseek(f, 0, SEEK_SET);  /* same as rewind(f); */

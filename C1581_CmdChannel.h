@@ -16,20 +16,7 @@ typedef struct {
 	name_t names[5];
 } command_t;
 
-struct DirectoryEntryType {
-	uint8_t file_type;
-	uint8_t first_data_track;
-	uint8_t first_data_sector;
-	uint8_t filename[16];
-	uint8_t first_track_ssb;	// side sector block (REL file only)
-	uint8_t first_sector_ssb;
-	uint8_t rel_file_length;
-	uint8_t unused[6];
-	uint8_t size_lo;
-	uint8_t size_hi;
-};
 
-typedef DirectoryEntryType DirectoryEntry;
 
 class C1581_CmdChannel
 {
@@ -64,10 +51,6 @@ public:
 	uint8_t renameFile(uint8_t *filename, uint8_t *newfilename);
 	uint8_t copyFile(uint8_t *srcfilename, uint8_t *destfilename);
 	uint8_t validate(void);
-	
-	int get_directory(uint8_t *localbuffer);
-
-	int getNextDirectoryEntry(DirectoryEntry **direntry);
 	
 };
 

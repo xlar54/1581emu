@@ -13,6 +13,21 @@ struct BamAllocationType {
 
 typedef BamAllocationType BamAllocation;
 
+struct DirectoryEntryType {
+	uint8_t file_type;
+	uint8_t first_data_track;
+	uint8_t first_data_sector;
+	uint8_t filename[16];
+	uint8_t first_track_ssb;	// side sector block (REL file only)
+	uint8_t first_sector_ssb;
+	uint8_t rel_file_length;
+	uint8_t unused[6];
+	uint8_t size_lo;
+	uint8_t size_hi;
+};
+
+typedef DirectoryEntryType DirectoryEntry;
+
 class C1581
 {
     uint8_t deviceum = 9;
@@ -51,6 +66,10 @@ class C1581
 		uint8_t C1581::read(uint8_t channel, uint8_t *byte);
 		uint8_t C1581::write(uint8_t channel, uint8_t byte);
 		uint8_t C1581::close(uint8_t channel);
+
+		int C1581::get_directory(uint8_t *buffer);
+		int C1581::getNextDirectoryEntry(DirectoryEntry *dirEntry);
+		bool C1581::getNextFileSector(uint8_t* filename);
 
 };
 

@@ -214,7 +214,7 @@ uint8_t C1581::getFileTrackSector(char *filename, uint8_t *track, uint8_t *secto
 
 	int x = 0;
 
-	localbufferidx = cmd_channel.getNextDirectoryEntry(&dirEntry);
+	localbufferidx = getNextDirectoryEntry(dirEntry);
 
 	while (localbufferidx != -1)
 	{
@@ -237,7 +237,7 @@ uint8_t C1581::getFileTrackSector(char *filename, uint8_t *track, uint8_t *secto
 			return ERR_OK;
 		}
 
-		localbufferidx = cmd_channel.getNextDirectoryEntry(&dirEntry);
+		localbufferidx = getNextDirectoryEntry(dirEntry);
 	}
 
 	return ERR_FILE_NOT_FOUND;
@@ -255,8 +255,7 @@ uint8_t C1581::read(uint8_t channel, uint8_t *byte)
 {
 	if (channel < 15)
 	{
-		if (channels[channel].nomoredata)
-			return ERR_READ_ERROR;
+		return channels[channel-1].read(byte);
 	}
 	else
 	{
@@ -277,4 +276,246 @@ uint8_t C1581::close(uint8_t channel)
 		return channels[channel - 1].close();
 	else
 		return cmd_channel.close();
+}
+
+int C1581::get_directory(uint8_t *buffer)
+{
+	DirectoryEntry *dirEntry = new DirectoryEntry;
+	int ptr = 0;
+	uint16_t blocksfree = 3160;
+	uint16_t nextLinePtr = 0;
+
+	uint8_t filetypes[6][3] = {
+			{ 'D', 'E', 'L' },
+			{ 'S', 'E', 'Q' },
+			{ 'P', 'R', 'G' },
+			{ 'U', 'S', 'R' },
+			{ 'R', 'E', 'L' },
+			{ 'C', 'B', 'M' }
+	};
+
+	goTrackSector(40, 0);
+	readSector();
+
+	buffer[ptr++] = 0x01;
+	buffer[ptr++] = 0x08;
+
+	nextLinePtr = ptr;
+	ptr += 2;
+
+	// disk header
+	sprintf(((char *)buffer + ptr), "%c%c%c%c", 0x00, 0x00, 0x12, 0x22);
+	ptr += 4;
+
+	for (int t = 0x04; t < 0x14; t++)
+	{
+		sprintf((char *)buffer + ptr, "%c", sectorBuffer[t]);
+		ptr++;
+	}
+
+	sprintf(((char *)buffer + ptr), "%c %c%c %c%c\0", 0x22, sectorBuffer[0x16],
+		sectorBuffer[0x17], sectorBuffer[0x19], sectorBuffer[0x1A]);
+	ptr += 8;
+
+	// testing with normal C64 line links
+	buffer[nextLinePtr] = (0x0801 + ptr) & 0xff;
+	buffer[nextLinePtr + 1] = ((0x0801 + ptr) >> 8) & 0xff;
+
+	// actual data has no line links (so that it can be linked by other cbm machines)
+	//buffer[nextLinePtr] = 0x0101 & 0xff;
+	//buffer[nextLinePtr + 1] = (0x0101 >> 8) & 0xff;
+
+	int x = getNextDirectoryEntry(dirEntry);
+	char line[30];
+	int linePtr = 0;
+	int ctr = 0;
+	while (x == 0)
+	{
+		if (dirEntry->file_type != 0)
+		{
+			ctr++;
+			linePtr = 0;
+
+			nextLinePtr = ptr;
+			ptr += 2;
+
+			line[linePtr++] = dirEntry->size_lo;
+			line[linePtr++] = dirEntry->size_hi;
+
+			int blocks = dirEntry->size_hi * 256 + dirEntry->size_lo;
+			blocksfree -= blocks;
+			int digits = 1;
+			while (blocks >= 0)
+			{
+				blocks /= 10;
+				++digits;
+
+				if (blocks == 0)
+					break;
+			}
+			int spaces = 5 - digits;
+			for (; spaces > 0; spaces--)
+				line[linePtr++] = ' ';
+
+			line[linePtr++] = 0x22;
+
+			int filenamlen = 0;
+			for (; filenamlen < 16; filenamlen++)
+			{
+				if (dirEntry->filename[filenamlen] == 0xa0)
+					break;
+
+				line[linePtr++] = dirEntry->filename[filenamlen];
+			}
+
+			line[linePtr++] = 0x22;
+
+			for (; filenamlen < 16; filenamlen++)
+				line[linePtr++] = ' ';
+
+			uint8_t tmptype = dirEntry->file_type;
+			tmptype = tmptype & ~128;
+			tmptype = tmptype & ~64;
+			tmptype = tmptype & ~32;
+			tmptype = tmptype & ~16;
+
+			if ((dirEntry->file_type & 0x80) != 0x80)
+				line[linePtr++] = '*';
+			else
+				line[linePtr++] = ' ';
+
+			line[linePtr++] = filetypes[tmptype][0];
+			line[linePtr++] = filetypes[tmptype][1];
+			line[linePtr++] = filetypes[tmptype][2];
+
+			if ((dirEntry->file_type & 64) == 64)
+				line[linePtr++] = '<';
+			else
+				line[linePtr++] = ' ';
+
+			line[linePtr++] = 0;
+
+			if (linePtr > 30)
+			{
+				abort();
+			}
+
+			for (int x = 0; x < linePtr; x++)
+				buffer[ptr++] = line[x];
+
+			buffer[nextLinePtr] = (0x0801 + ptr) & 0xff;
+			buffer[nextLinePtr + 1] = ((0x0801 + ptr) >> 8) & 0xff;
+		}
+
+		x = getNextDirectoryEntry(dirEntry);
+	}
+
+	nextLinePtr = ptr;
+	ptr += 2;
+	sprintf(((char *)buffer + ptr), "%c%cBLOCKS FREE.              ", blocksfree % 256, blocksfree / 256);
+	ptr += 29;
+
+	buffer[nextLinePtr] = (0x0801 + ptr) & 0xff;
+	buffer[nextLinePtr + 1] = ((0x0801 + ptr) >> 8) & 0xff;
+
+	// end of program
+	buffer[ptr] = 0;
+	buffer[ptr + 1] = 0;
+	buffer[ptr + 2] = 0;
+	ptr += 3;
+
+
+	//delete dirEntry;
+	return ptr;
+}
+
+int C1581::getNextDirectoryEntry(DirectoryEntry *dirEntry)
+{
+	static bool firstcall = true;
+	static int dirctr = 0;
+	static bool lastdirsector = false;
+	bool readnextsector = false;
+
+	int offset = 0;
+
+	if (firstcall)
+	{
+		firstcall = false;
+		goTrackSector(40, 3);
+		readnextsector = true;
+	}
+	else
+	{
+		if (dirctr % 8 == 0)
+		{
+			if (lastdirsector)
+				return -1;
+
+			goTrackSector(nxttrack, nxtsector);
+			dirctr = 0;
+			readnextsector = true;
+		}
+	}
+
+	offset = dirctr * 32;
+
+	if (readnextsector)
+	{
+		readnextsector = false;
+		readSector();
+		nxttrack = sectorBuffer[0x00 + offset];
+		nxtsector = sectorBuffer[0x01 + offset];
+	}
+
+	if (nxttrack == 0x00 && nxtsector == 0xff)
+		lastdirsector = true;
+	
+	dirEntry->file_type = sectorBuffer[0x02 + offset];
+	dirEntry->first_data_track = sectorBuffer[0x03 + offset];
+	dirEntry->first_data_sector = sectorBuffer[0x04 + offset];
+
+	for (int v = 0; v < 16; v++)
+		dirEntry->filename[v] = sectorBuffer[(5 + v) + offset];
+
+	dirEntry->first_track_ssb = sectorBuffer[0x15 + offset];
+	dirEntry->first_sector_ssb = sectorBuffer[0x16 + offset];
+	dirEntry->rel_file_length = sectorBuffer[0x17 + offset];
+
+	for (int v = 0; v < 6; v++)
+		dirEntry->unused[v + dirctr] = sectorBuffer[0x18 + v + offset];
+
+	dirEntry->size_lo = sectorBuffer[0x1e + (dirctr * 32)];
+	dirEntry->size_hi = sectorBuffer[0x1f + (dirctr * 32)];
+
+	dirctr++;
+
+	return 0;
+
+}
+
+bool C1581::getNextFileSector(uint8_t* filename)
+{
+	static bool firstcall = true;
+	uint8_t file_track;
+	uint8_t file_sector;
+	int ptr = 0;
+
+	if (firstcall)
+	{
+		getFileTrackSector((char *)filename, &file_track, &file_sector);
+		goTrackSector(file_track, file_sector);
+	}
+	else
+	{
+		goTrackSector(nxttrack, nxtsector);
+	}
+	
+	readSector();
+	nxttrack = sectorBuffer[0x00];
+	nxtsector = sectorBuffer[0x01];
+	
+	if (nxttrack == 0x00)
+		return false;
+
+	return true;
 }
