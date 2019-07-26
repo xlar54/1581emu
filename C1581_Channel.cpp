@@ -25,14 +25,13 @@ void C1581_Channel::init(C1581 *parent)
 
 uint8_t C1581_Channel::open(uint8_t *filename, uint8_t secondary)
 {
-	uint8_t track;
-	uint8_t sector;
-	localbuffer = new uint8_t[65535];
-	localbufferidx = 0;
-
-	channelopen = true;
-	bool moredata = false;
+	strcpy((char *)this->file_name, (char *)filename);
 	
+	this->channelopen = true;
+	
+	return c1581->getFileTrackSector((char *)this->file_name, &this->file_track, &this->file_sector);
+		
+	/*
 	// load entire file into localbuffer
 	do
 	{
@@ -45,59 +44,62 @@ uint8_t C1581_Channel::open(uint8_t *filename, uint8_t secondary)
 
 	} while (moredata == true);
 
-	return ERR_OK;
+	return ERR_OK;*/
 }
 
 bool C1581_Channel::readblock()
 {
-	// localbuffer contains the full command response (all the data)
-	// we load it, 256 bytes at a time, into the databuffer
-	bool lastblock = false;
+	bool moredata = false;
 
-	if (localbuffer == 0)
-		return ERR_FILE_NOT_OPEN;
+	static bool firstcall = true;
+	int ptr = 0;
 
-	// the first two bytes are track/sector, 
-	// so the block size is actually only 254 bytes
-	int blockdatasize = 254;
-
-	// clear the databuffer
-	memset(databuffer, 0, sizeof(databuffer));
-
-	// this should capture end of file
-	if (localbufferidx < (localblocknum + 1) * 254)
+	if (firstcall)
 	{
-		blockdatasize = ((localblocknum * 254) % localbufferidx);
-		localblocknum = 0;
-		lastblock = true;
+		c1581->goTrackSector(this->file_track, this->file_sector);
+		firstcall = false;
+	}
+	else
+	{
+		c1581->goTrackSector(c1581->nxttrack, c1581->nxtsector);
 	}
 
-	// fill the channel buffer
-	for (int t = 0; t < blockdatasize; t++)
-	{
-		uint8_t b = localbuffer[localblocknum * 254 + t];
-		databuffer[t] = b;
-	}
+	c1581->readSector();
+	memcpy(this->databuffer, c1581->sectorBuffer, 256);
+	
+	c1581->nxttrack = c1581->sectorBuffer[0x00];
+	c1581->nxtsector = c1581->sectorBuffer[0x01];
 
-	localblocknum++;
-	return lastblock;
+	if (c1581->nxttrack == 0x00)
+		return false;
+
+	return true;
 }
 
 uint8_t C1581_Channel::read(uint8_t *byte)
 {
-	static bool lastblock = false;
+	static bool moredata = false;
 
 	// is it time to read a new block of data?
 	if (databufferidx == 0)
-		lastblock = readblock();
-
+	{
+		moredata = readblock();
+		databufferidx += 2;
+	}
+		
 	// return a byte
-	*byte = databuffer[databufferidx++];
+	*byte = databuffer[databufferidx];
 
-	if (databufferidx == 0 && lastblock)
+	if (databufferidx == 255 && moredata == false)
+	{
+		databufferidx=0;
 		return ERR_READ_ERROR;
+	}
 	else
+	{
+		databufferidx++;
 		return ERR_OK;
+	}
 }
 
 uint8_t C1581_Channel::write(uint8_t byte)

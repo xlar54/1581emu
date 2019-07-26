@@ -10,8 +10,9 @@
 #include "C1581_CmdChannel.h"
 
 #define MAX_TRACK       80
-#define MAX_SECRTOR     39
+#define MAX_SECTOR		39
 #define MAX_DIR_ENTRIES	296
+#define CMD_CHANNEL		15
 
 uint32_t trackOffset[80] = {
 		0x00000,0x02800,0x05000,0x07800,0x0A000,0x0C800,0x0F000,0x11800,0x14000,0x16800,0x19000,0x1B800,0x1E000,0x20800,0x23000,0x25800,
@@ -42,9 +43,10 @@ void C1581 :: init(uint8_t deviceNumber)
 	}
 
 	cmd_channel.init(this);
-
+	memset(this->curdisk, 0, DISK_SIZE);
     deviceum = deviceNumber;
 }
+
 void C1581 :: powerOn(void)
 {
     power = true;
@@ -58,15 +60,15 @@ void C1581 :: insertDisk(uint8_t *image)
 {
 	memcpy(curdisk, image, DISK_SIZE);
 }
-
 void C1581 :: ejectDisk(void)
 {
     hasDisk = false;
 }
 
+
 uint8_t C1581::goTrackSector(uint8_t track, uint8_t sector)
 {
-	if (track < 1 || track > MAX_TRACK || sector < 0 || sector > MAX_SECRTOR)
+	if (track < 1 || track > MAX_TRACK || sector < 0 || sector > MAX_SECTOR)
 	{
 		return -1;
 	}
@@ -80,13 +82,14 @@ uint8_t C1581::goTrackSector(uint8_t track, uint8_t sector)
 void C1581::readSector(void)
 {
 	uint32_t offset = trackOffset[this->curtrack-1];
-	offset = offset + this->cursector * 256;
+	offset = offset + this->cursector * BLOCK_SIZE;
 	
-	for (int x = 0; x < 256; x++)
+	for (int x = 0; x < BLOCK_SIZE; x++)
 		sectorBuffer[x] = curdisk[offset + x];
 
 	return;
 }
+
 
 uint8_t C1581::nextSector(void)
 {
@@ -245,7 +248,7 @@ uint8_t C1581::getFileTrackSector(char *filename, uint8_t *track, uint8_t *secto
 
 uint8_t C1581::open(uint8_t channel, uint8_t *command, uint8_t secondary)
 {
-	if (channel < 15)
+	if (channel < CMD_CHANNEL)
 		return channels[channel - 1].open(command, secondary);
 	else
 		return cmd_channel.open(command, secondary);
@@ -253,7 +256,7 @@ uint8_t C1581::open(uint8_t channel, uint8_t *command, uint8_t secondary)
 
 uint8_t C1581::read(uint8_t channel, uint8_t *byte)
 {
-	if (channel < 15)
+	if (channel < CMD_CHANNEL)
 	{
 		return channels[channel-1].read(byte);
 	}
@@ -277,6 +280,7 @@ uint8_t C1581::close(uint8_t channel)
 	else
 		return cmd_channel.close();
 }
+
 
 int C1581::get_directory(uint8_t *buffer)
 {

@@ -4,6 +4,7 @@
 #include "types.h"
 
 #define DISK_SIZE	819200
+#define BLOCK_SIZE	256
 
 struct BamAllocationType {
 	uint8_t track;
@@ -34,7 +35,6 @@ class C1581
     bool power;
     bool hasDisk;
     uint8_t curdisk[DISK_SIZE];
-	uint8_t filesOpen[10] = { 0,0,0,0,0,0,0,0,0,0 };
 	bool bamisdirty = false;
 
     public:
@@ -48,10 +48,13 @@ class C1581
         ~C1581();
 
         void init(uint8_t driveNumber);
-        void powerOn(void);
+        
+		void powerOn(void);
         void powerOff(void);
-        void insertDisk(uint8_t *image);
+        
+		void insertDisk(uint8_t *image);
         void ejectDisk(void);
+
 		uint8_t goTrackSector(uint8_t track, uint8_t sector);
 		void readSector(void);
 		uint8_t nextSector(void);

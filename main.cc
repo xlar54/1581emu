@@ -129,15 +129,28 @@ void test_loadfile()
 
 void test_readfile(C1581 *c1581)
 {
-	c1581->open(1, (uint8_t *)"GEOS", 0);
+	c1581->open(1, (uint8_t *)"GEOBOOT", 0);
 
 	uint8_t byte;
 	int ctr = 0;
+	int trkctr = 0;
 
-	while (c1581->read(1, &byte) == ERR_OK)
+	while(1)
 	{
+		uint8_t err = c1581->read(1, &byte);
 		ctr++;
+
 		printf("0x%02X ", byte);
+
+		if (ctr % 254 == 0)
+		{
+			trkctr++;
+			printf("\n **Next track\n");
+		}
+			
+
+		if (err != ERR_OK)
+			break;
 	}
 
 	c1581->close(1);
@@ -147,7 +160,7 @@ int main( int argc, const char* argv[] )
 {
 	uint8_t image[819200];
 
-	FILE *f = fopen("test-full.d81", "rb");
+	FILE *f = fopen("test-geos.d81", "rb");
 	fseek(f, 0, SEEK_END);
 	long fsize = ftell(f);
 	fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
@@ -160,10 +173,10 @@ int main( int argc, const char* argv[] )
     c1581.powerOn();
     c1581.insertDisk(image);
 
-	//test_readfile(&c1581);
+	test_readfile(&c1581);
 	//test_format(&c1581);
 	//test_rename(&c1581);
-	test_outputdirectory(&c1581);
+	//test_outputdirectory(&c1581);
 	//test_initialize(&c1581);
 	//test_findfreesector();
 	//test_getfiletracksector();

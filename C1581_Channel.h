@@ -6,9 +6,7 @@
 
 class C1581_Channel
 {
-	// the first two bytes are track/sector, 
-	// so the block size is actually only 254 bytes
-	uint8_t databuffer[254];
+	uint8_t databuffer[256];
 	uint8_t databufferidx = 0;
 	uint8_t *localbuffer = 0;
 	int localbufferidx = 0;
@@ -16,6 +14,7 @@ class C1581_Channel
 	int blockidx = 0;
 	uint8_t file_track = 0;
 	uint8_t file_sector = 0;
+	uint8_t file_name[16];
 	static C1581 *c1581;
 
 public:
